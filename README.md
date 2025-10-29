@@ -11,6 +11,7 @@ A comprehensive DevOps ecosystem integrating Flask web application with microser
 - [Detailed Setup](#detailed-setup)
 - [Usage](#usage)
 - [Access URLs](#access-urls)
+ - [Manual Deployment and Testing](#manual-deployment-and-testing)
 - [Features](#features)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
@@ -290,6 +291,132 @@ After successful installation, access your applications:
 # Get ArgoCD admin password
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
+
+## 🛠️ Manual Deployment and Testing
+
+If you prefer to deploy and test without running the helper scripts, follow these steps.
+
+### 1) Create a local kind cluster (with Ingress)
+
+```bash
+cat > kind-config.yaml << 'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: devops-pipeline
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 80
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 443
+    protocol: TCP
+- role: worker
+- role: worker
+EOF
+
+kind create cluster --config kind-config.yaml
+kubectl cluster-info --context kind-devops-pipeline
+
+# Install NGINX Ingress for kind
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl wait --namespace ingress-nginx \
+  --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller \
+  --timeout=90s
+```
+
+### 2) Build and load images into the cluster
+
+```bash
+# Flask app
+docker build -t flask-app:latest ./apps/flask-app
+kind load docker-image flask-app:latest --name devops-pipeline
+
+# User service
+docker build -t user-service:latest ./apps/microservice-1
+kind load docker-image user-service:latest --name devops-pipeline
+
+# Product service
+docker build -t product-service:latest ./apps/microservice-2
+kind load docker-image product-service:latest --name devops-pipeline
+```
+
+### 3) Create namespace and deploy workloads
+
+```bash
+kubectl create namespace dev || true
+
+# Deploy Flask app
+kubectl -n dev apply -f apps/flask-app/deployment.yaml
+
+# Deploy User service
+kubectl -n dev apply -f apps/microservice-1/deployment.yaml
+
+# Deploy Product service
+kubectl -n dev apply -f apps/microservice-2/deployment.yaml
+
+# Wait for deployments
+kubectl -n dev wait --for=condition=available --timeout=300s deployment/flask-app
+kubectl -n dev wait --for=condition=available --timeout=300s deployment/user-service
+kubectl -n dev wait --for=condition=available --timeout=300s deployment/product-service
+```
+
+### 4) Expose Flask via Ingress and add hosts entries
+
+```bash
+cat > flask-ingress.yaml << 'EOF'
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flask-app-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: flask-app.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: flask-app-service
+            port:
+              number: 80
+EOF
+
+kubectl apply -f flask-ingress.yaml
+rm flask-ingress.yaml
+
+# Add local DNS entries
+echo "127.0.0.1 flask-app.local" | sudo tee -a /etc/hosts
+```
+
+### 5) Test manually
+
+```bash
+# App health
+curl -s http://flask-app.local/api/health | jq . || curl -s http://flask-app.local/api/health
+
+# Home page
+curl -I http://flask-app.local/
+
+# Service-to-service endpoints (inside cluster)
+kubectl -n dev run tmp --rm -it --image=curlimages/curl -- /bin/sh -lc \
+  'curl -s user-service:5001/api/users && echo && curl -s product-service:5002/api/products && echo'
+```
+
+Notes:
+- The manual flow above deploys only the sample apps. For GitOps, Gitea, ArgoCD, MinIO, Trivy Operator, and Velero, use the provided scripts or replicate the Helm installs and manifests from `bootstrap_cluster.sh` and `deploy_pipeline.sh`.
 
 ## 🎯 Usage
 

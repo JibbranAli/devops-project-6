@@ -193,3 +193,13 @@ print_status "Next steps:"
 echo "  1. Log out and log back in"
 echo "  2. Run: ./bootstrap_cluster.sh"
 echo "  3. Run: ./deploy_pipeline.sh"
+
+# Helpful URLs (after cluster bootstrap and app deploy)
+print_status "Planned access URLs (available after bootstrap and deploy):"
+echo "  Flask App: http://flask-app.local"
+echo "  Gitea:     http://gitea.local (admin/admin123)"
+echo "  MinIO:     http://minio.local (minioadmin/minioadmin123)"
+echo "  ArgoCD:    http://argocd.local (admin/<see command below>)"
+echo ""
+echo "Get ArgoCD password once cluster is up:"
+echo "  kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath=\"{.data.password}\" | base64 -d && echo"
