@@ -130,9 +130,11 @@ fi
 # Install kubectl
 print_status "Installing kubectl..."
 if ! command -v kubectl &> /dev/null; then
-    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    rm kubectl
+    KUBECTL_STABLE=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+    curl -L "https://dl.k8s.io/release/${KUBECTL_STABLE}/bin/linux/amd64/kubectl" -o /tmp/kubectl
+    chmod +x /tmp/kubectl
+    sudo install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+    rm -f /tmp/kubectl
     print_success "kubectl installed successfully"
 else
     print_warning "kubectl is already installed"
@@ -141,9 +143,9 @@ fi
 # Install kind (Kubernetes in Docker)
 print_status "Installing kind..."
 if ! command -v kind &> /dev/null; then
-    curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-    chmod +x ./kind
-    sudo mv ./kind /usr/local/bin/kind
+    curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+    chmod +x /tmp/kind
+    sudo mv /tmp/kind /usr/local/bin/kind
     print_success "kind installed successfully"
 else
     print_warning "kind is already installed"
@@ -161,9 +163,9 @@ fi
 # Install ArgoCD CLI
 print_status "Installing ArgoCD CLI..."
 if ! command -v argocd &> /dev/null; then
-    curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-    sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-    rm argocd-linux-amd64
+    curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    sudo install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+    rm -f /tmp/argocd-linux-amd64
     print_success "ArgoCD CLI installed successfully"
 else
     print_warning "ArgoCD CLI is already installed"
@@ -181,10 +183,10 @@ fi
 # Install Velero
 print_status "Installing Velero..."
 if ! command -v velero &> /dev/null; then
-    wget https://github.com/vmware-tanzu/velero/releases/download/v1.12.0/velero-v1.12.0-linux-amd64.tar.gz
-    tar -xvf velero-v1.12.0-linux-amd64.tar.gz
-    sudo mv velero-v1.12.0-linux-amd64/velero /usr/local/bin/
-    rm -rf velero-v1.12.0-linux-amd64*
+    wget -O /tmp/velero.tar.gz https://github.com/vmware-tanzu/velero/releases/download/v1.12.0/velero-v1.12.0-linux-amd64.tar.gz
+    tar -xvf /tmp/velero.tar.gz -C /tmp
+    sudo mv /tmp/velero-v1.12.0-linux-amd64/velero /usr/local/bin/
+    rm -rf /tmp/velero-v1.12.0-linux-amd64* /tmp/velero.tar.gz
     print_success "Velero installed successfully"
 else
     print_warning "Velero is already installed"
@@ -193,8 +195,10 @@ fi
 # Install Kustomize
 print_status "Installing Kustomize..."
 if ! command -v kustomize &> /dev/null; then
+    cd /tmp
     curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-    sudo mv kustomize /usr/local/bin/
+    sudo mv /tmp/kustomize /usr/local/bin/ || sudo mv kustomize /usr/local/bin/
+    cd - > /dev/null
     print_success "Kustomize installed successfully"
 else
     print_warning "Kustomize is already installed"
