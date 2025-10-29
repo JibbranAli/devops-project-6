@@ -174,7 +174,9 @@ fi
 # Install Trivy
 print_status "Installing Trivy..."
 if ! command -v trivy &> /dev/null; then
-    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /tmp
+    sudo install -m 755 /tmp/trivy /usr/local/bin/trivy
+    rm -f /tmp/trivy
     print_success "Trivy installed successfully"
 else
     print_warning "Trivy is already installed"
