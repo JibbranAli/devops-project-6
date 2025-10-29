@@ -79,8 +79,14 @@ if [[ "$PKG_MGR" == "apt" ]]; then
         software-properties-common
 else
     # Amazon Linux / RHEL-family
-    sudo ${PKG_MGR} -y install \
-        curl \
+    # Avoid curl conflicts with curl-minimal; install curl only if not present
+    if rpm -q curl-minimal &> /dev/null; then
+        CURL_PKG=""
+    else
+        CURL_PKG="curl"
+    fi
+    sudo ${PKG_MGR} -y --allowerasing install \
+        ${CURL_PKG} \
         wget \
         git \
         unzip \
@@ -92,7 +98,10 @@ else
         make \
         ca-certificates || true
     # Ensure pip is up to date
-    python3 -m pip install --upgrade --user pip
+    if ! command -v pip3 &> /dev/null; then
+        python3 -m ensurepip --upgrade || true
+    fi
+    python3 -m pip install --upgrade --user pip || true
 fi
 
 # Install Docker
@@ -105,7 +114,8 @@ if ! command -v docker &> /dev/null; then
         sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     else
         # Amazon Linux / RHEL-family
-        sudo ${PKG_MGR} -y install docker
+        sudo ${PKG_MGR} -y --allowerasing install docker || \
+        sudo ${PKG_MGR} -y --allowerasing install moby-engine moby-cli
         sudo systemctl enable docker || true
         sudo systemctl start docker || true
     fi
