@@ -41,7 +41,7 @@ VELERO_NAMESPACE="velero"
 
 # Create kind cluster configuration
 print_status "Creating kind cluster configuration..."
-cat > kind-config.yaml << EOF
+cat > /tmp/kind-config.yaml << EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: ${CLUSTER_NAME}
@@ -77,7 +77,7 @@ if kind get clusters | grep -q ${CLUSTER_NAME}; then
     kind delete cluster --name ${CLUSTER_NAME}
 fi
 
-kind create cluster --config kind-config.yaml
+kind create cluster --config /tmp/kind-config.yaml
 kubectl cluster-info --context kind-${CLUSTER_NAME}
 
 # Install NGINX Ingress Controller
@@ -101,7 +101,7 @@ print_status "Installing Gitea..."
 helm repo add gitea-charts https://dl.gitea.io/charts/
 helm repo update
 
-cat > gitea-values.yaml << EOF
+cat > /tmp/gitea-values.yaml << EOF
 gitea:
   admin:
     username: admin
@@ -135,7 +135,7 @@ EOF
 
 helm install gitea gitea-charts/gitea \
   --namespace ${GITEA_NAMESPACE} \
-  --values gitea-values.yaml \
+  --values /tmp/gitea-values.yaml \
   --wait
 
 # Install ArgoCD
@@ -151,7 +151,7 @@ print_status "Installing MinIO..."
 helm repo add minio https://charts.min.io/
 helm repo update
 
-cat > minio-values.yaml << EOF
+cat > /tmp/minio-values.yaml << EOF
 mode: standalone
 auth:
   rootUser: minioadmin
@@ -176,7 +176,7 @@ EOF
 
 helm install minio minio/minio \
   --namespace ${MINIO_NAMESPACE} \
-  --values minio-values.yaml \
+  --values /tmp/minio-values.yaml \
   --wait
 
 # Install Trivy Operator
@@ -192,7 +192,7 @@ helm install trivy-operator aqua/trivy-operator \
 # Install Velero
 print_status "Installing Velero..."
 # Create MinIO credentials for Velero
-cat > credentials-velero << EOF
+cat > /tmp/credentials-velero << EOF
 [default]
 aws_access_key_id = minioadmin
 aws_secret_access_key = minioadmin123
@@ -203,7 +203,7 @@ velero install \
   --provider aws \
   --plugins velero/velero-plugin-for-aws:v1.7.0 \
   --bucket velero-backups \
-  --secret-file ./credentials-velero \
+  --secret-file /tmp/credentials-velero \
   --use-volume-snapshots=false \
   --backup-location-config region=minio,s3ForcePathStyle=true,s3Url=http://minio.minio.svc.cluster.local:9000 \
   --namespace ${VELERO_NAMESPACE}
@@ -213,7 +213,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/velero -n ${VEL
 
 # Create ArgoCD Application for GitOps
 print_status "Setting up ArgoCD Application..."
-cat > argocd-app.yaml << EOF
+cat > /tmp/argocd-app.yaml << EOF
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -237,7 +237,7 @@ spec:
 EOF
 
 # Apply ArgoCD Application
-kubectl apply -f argocd-app.yaml
+kubectl apply -f /tmp/argocd-app.yaml
 
 # Get ArgoCD admin password
 print_status "Retrieving ArgoCD admin password..."
@@ -250,7 +250,7 @@ echo "127.0.0.1 minio.local" | sudo tee -a /etc/hosts
 echo "127.0.0.1 argocd.local" | sudo tee -a /etc/hosts
 
 # Clean up temporary files
-rm -f kind-config.yaml gitea-values.yaml minio-values.yaml credentials-velero argocd-app.yaml
+rm -f /tmp/kind-config.yaml /tmp/gitea-values.yaml /tmp/minio-values.yaml /tmp/credentials-velero /tmp/argocd-app.yaml
 
 print_success "Cluster bootstrap completed successfully!"
 print_status "Access URLs:"

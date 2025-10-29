@@ -242,7 +242,7 @@ echo "kind version: $(kind version)"
 echo "Helm version: $(helm version --short)"
 echo "ArgoCD CLI version: $(argocd version --client --short)"
 echo "Trivy version: $(trivy --version | head -1)"
-echo "Velero version: $(velero version --client)"
+echo "Velero version: $(velero version 2>/dev/null | head -1 || echo 'velero installed')"
 echo "Kustomize version: $(kustomize version --short)"
 echo "MkDocs version: $(mkdocs --version)"
 
