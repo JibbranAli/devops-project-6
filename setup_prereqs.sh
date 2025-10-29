@@ -37,38 +37,81 @@ if [[ $EUID -eq 0 ]]; then
    exit 1
 fi
 
+# Detect package manager / distro
+print_status "Detecting package manager..."
+PKG_MGR=""
+if command -v apt-get &> /dev/null; then
+    PKG_MGR="apt"
+elif command -v dnf &> /dev/null; then
+    PKG_MGR="dnf"
+elif command -v yum &> /dev/null; then
+    PKG_MGR="yum"
+else
+    print_error "Supported package manager not found (apt, dnf, yum). Please install prerequisites manually."
+    exit 1
+fi
+
 # Update system packages
 print_status "Updating system packages..."
-sudo apt-get update -y
+if [[ "$PKG_MGR" == "apt" ]]; then
+    sudo apt-get update -y
+else
+    sudo ${PKG_MGR} -y update || true
+fi
 
 # Install basic dependencies
 print_status "Installing basic dependencies..."
-sudo apt-get install -y \
-    curl \
-    wget \
-    git \
-    unzip \
-    jq \
-    python3 \
-    python3-pip \
-    python3-venv \
-    build-essential \
-    apt-transport-https \
-    ca-certificates \
-    gnupg \
-    lsb-release \
-    software-properties-common
+if [[ "$PKG_MGR" == "apt" ]]; then
+    sudo apt-get install -y \
+        curl \
+        wget \
+        git \
+        unzip \
+        jq \
+        python3 \
+        python3-pip \
+        python3-venv \
+        build-essential \
+        apt-transport-https \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        software-properties-common
+else
+    # Amazon Linux / RHEL-family
+    sudo ${PKG_MGR} -y install \
+        curl \
+        wget \
+        git \
+        unzip \
+        jq \
+        python3 \
+        python3-pip \
+        tar \
+        gcc \
+        make \
+        ca-certificates || true
+    # Ensure pip is up to date
+    python3 -m pip install --upgrade --user pip
+fi
 
 # Install Docker
 print_status "Installing Docker..."
 if ! command -v docker &> /dev/null; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    
+    if [[ "$PKG_MGR" == "apt" ]]; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update -y
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    else
+        # Amazon Linux / RHEL-family
+        sudo ${PKG_MGR} -y install docker
+        sudo systemctl enable docker || true
+        sudo systemctl start docker || true
+    fi
+
     # Add user to docker group
-    sudo usermod -aG docker $USER
+    sudo usermod -aG docker $USER || true
     print_success "Docker installed successfully"
 else
     print_warning "Docker is already installed"
