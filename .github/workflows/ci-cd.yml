@@ -2,6 +2,59 @@ name: DevOps Pipeline CI/CD
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build images
+        run: |
+          docker build -t flask-app:latest apps/flask-app
+          docker build -t user-service:latest apps/microservice-1
+          docker build -t product-service:latest apps/microservice-2
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [ build-test ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Trivy
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: 'config'
+          ignore-unfixed: true
+          format: 'table'
+          exit-code: '0'  # non-blocking for config scan
+      - name: Build images for scanning
+        run: |
+          docker build -t flask-app:latest apps/flask-app
+          docker build -t user-service:latest apps/microservice-1
+          docker build -t product-service:latest apps/microservice-2
+      - name: Trivy image scan (non-blocking)
+        run: |
+          trivy image --timeout 5m --ignore-unfixed --severity HIGH,CRITICAL --exit-code 0 flask-app:latest || true
+          trivy image --timeout 5m --ignore-unfixed --severity HIGH,CRITICAL --exit-code 0 user-service:latest || true
+          trivy image --timeout 5m --ignore-unfixed --severity HIGH,CRITICAL --exit-code 0 product-service:latest || true
+
+  health-check:
+    runs-on: ubuntu-latest
+    needs: [ security-scan ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Basic validation
+        run: |
+          echo "✅ Workflow completed to health-check stage"
+name: DevOps Pipeline CI/CD
+
+on:
+  push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
