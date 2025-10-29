@@ -136,7 +136,8 @@ EOF
 helm install gitea gitea-charts/gitea \
   --namespace ${GITEA_NAMESPACE} \
   --values /tmp/gitea-values.yaml \
-  --wait
+  --wait \
+  --timeout 10m
 
 # Install ArgoCD
 print_status "Installing ArgoCD..."
@@ -177,7 +178,8 @@ EOF
 helm install minio minio/minio \
   --namespace ${MINIO_NAMESPACE} \
   --values /tmp/minio-values.yaml \
-  --wait
+  --wait \
+  --timeout 10m
 
 # Install Trivy Operator
 print_status "Installing Trivy Operator..."
@@ -187,7 +189,8 @@ helm repo update
 helm install trivy-operator aqua/trivy-operator \
   --namespace ${TRIVY_NAMESPACE} \
   --create-namespace \
-  --wait
+  --wait \
+  --timeout 10m
 
 # Install Velero
 print_status "Installing Velero..."
