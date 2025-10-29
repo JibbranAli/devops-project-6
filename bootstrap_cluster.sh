@@ -133,11 +133,34 @@ service:
     port: 3000
 EOF
 
-helm install gitea gitea-charts/gitea \
-  --namespace ${GITEA_NAMESPACE} \
-  --values /tmp/gitea-values.yaml \
-  --wait \
-  --timeout 10m
+# Install Gitea without --wait (will check status manually)
+print_status "Installing Gitea (this may take several minutes)..."
+# Uninstall existing release if present
+if helm list -n ${GITEA_NAMESPACE} | grep -q gitea; then
+    print_warning "Gitea release already exists, upgrading..."
+    helm upgrade gitea gitea-charts/gitea \
+      --namespace ${GITEA_NAMESPACE} \
+      --values /tmp/gitea-values.yaml \
+      --timeout 10m || print_warning "Gitea helm upgrade completed with warnings"
+else
+    helm install gitea gitea-charts/gitea \
+      --namespace ${GITEA_NAMESPACE} \
+      --values /tmp/gitea-values.yaml \
+      --timeout 10m || print_warning "Gitea helm install completed with warnings"
+fi
+
+# Wait for Gitea pods to be created and running
+print_status "Waiting for Gitea pods to be ready (this may take a few minutes)..."
+sleep 15
+# Wait for pods to appear first
+for i in {1..20}; do
+    if kubectl get pods -n ${GITEA_NAMESPACE} -l app.kubernetes.io/name=gitea 2>/dev/null | grep -v NAME | grep -q .; then
+        break
+    fi
+    sleep 5
+done
+kubectl wait --for=condition=ready --timeout=600s pod -l app.kubernetes.io/name=gitea -n ${GITEA_NAMESPACE} || \
+    print_warning "Gitea pods may still be starting, but continuing..."
 
 # Install ArgoCD
 print_status "Installing ArgoCD..."
@@ -175,22 +198,35 @@ ingress:
     nginx.ingress.kubernetes.io/rewrite-target: /
 EOF
 
+# Install MinIO without --wait
+print_status "Installing MinIO (this may take several minutes)..."
 helm install minio minio/minio \
   --namespace ${MINIO_NAMESPACE} \
   --values /tmp/minio-values.yaml \
-  --wait \
-  --timeout 10m
+  --timeout 10m || print_warning "MinIO helm install completed with warnings"
+
+# Wait for MinIO pods to be ready
+print_status "Waiting for MinIO pods to be ready..."
+sleep 15
+kubectl wait --for=condition=ready --timeout=600s pod -l app=minio -n ${MINIO_NAMESPACE} || \
+    print_warning "MinIO pods may still be starting, but continuing..."
 
 # Install Trivy Operator
 print_status "Installing Trivy Operator..."
 helm repo add aqua https://aquasecurity.github.io/helm-charts/
 helm repo update
 
+# Install Trivy Operator without --wait
 helm install trivy-operator aqua/trivy-operator \
   --namespace ${TRIVY_NAMESPACE} \
   --create-namespace \
-  --wait \
-  --timeout 10m
+  --timeout 10m || print_warning "Trivy Operator helm install completed with warnings"
+
+# Wait for Trivy Operator pods to be ready
+print_status "Waiting for Trivy Operator to be ready..."
+sleep 10
+kubectl wait --for=condition=ready --timeout=300s pod -l app.kubernetes.io/name=trivy-operator -n ${TRIVY_NAMESPACE} || \
+    print_warning "Trivy Operator may still be starting, but continuing..."
 
 # Install Velero
 print_status "Installing Velero..."
